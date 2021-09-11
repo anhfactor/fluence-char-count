@@ -3,11 +3,9 @@
 ###### Description
 Extend the Fluence Quickstart, https://github.com/fluencelabs/examples/tree/main/quickstart/3-browser-to-service, with a distributed character count service deployed to at least one Fluence peer. Display a message's character count at the end of the message, e.g., (char count: 123 chars). You should accurately count characters.
 
-*browser-to-service* example. e.g., (char count: 123 chars).
-
 ### Creating the WebAssembly module for char-count service
 
-Based on `2-hosted-services` example the following service was created:
+Based on `2-hosted-services` we modify it to:
 
 ```rust
 // src/main.rs
@@ -21,14 +19,26 @@ pub fn main() {}
 #[marine]
 pub struct CharCount {
     pub msg: String,
-    pub count: String,
+    pub reply: String,
 }
 
 #[marine]
-pub fn char_count(msg: String) -> CharCount {
+pub fn char_count(message: String) -> CharCount {
+    let num_chars = message.chars().count();
+    let _msg;
+    let _reply;
+
+    if num_chars < 1 {
+        _msg = format!("Your message was empty");
+        _reply = format!("Your message has 0 characters");
+    } else {
+        _msg = format!("Message: {}", message);
+        _reply = format!("Your message {} has {} character(s)", message, num_chars);
+    }
+
     CharCount {
-        msg: format!("{}", msg),
-        count: format!("{} chars", msg.len()),
+        msg: _msg,
+        reply: _reply
     }
 }
 ```
@@ -42,97 +52,29 @@ Run `./scripts/build.sh` to compile the code to the Wasm target from the VSCode 
 A couple of test were created in our `main.rs` file:
 
 ```rust
-// quickstart/4-char-count-service/src/main.rs
-use marine_rs_sdk::marine;
-use marine_rs_sdk::module_manifest;
-
-//<snip>
-
 #[cfg(test)]
-mod tests {
-    use marine_rs_sdk_test::marine_test;
-
-    #[marine_test(config_path = "../configs/Config.toml", modules_dir = "../artifacts")]
-    fn char_count_0(char_count: marine_test_env::char_count::ModuleInterface) {
-        let actual = char_count.char_count("".to_string());
-        assert_eq!(actual.msg, "");
-        assert_eq!(actual.count, "0 chars");
-    }
-
-    #[marine_test(config_path = "../configs/Config.toml", modules_dir = "../artifacts")]
-    fn char_count_2(char_count: marine_test_env::char_count::ModuleInterface) {
-        let actual = char_count.char_count("at".to_string());
-        assert_eq!(actual.msg, "at");
-        assert_eq!(actual.count, "2 chars");
-    }
-
-    #[marine_test(config_path = "../configs/Config.toml", modules_dir = "../artifacts")]
-    fn char_count_space(char_count: marine_test_env::char_count::ModuleInterface) {
-        let actual = char_count.char_count("at aqua".to_string());
-        assert_eq!(actual.count, "7 chars");
-    }
-}
+ mod tests {
+     use marine_rs_sdk_test::marine_test;
+ 
+     #[marine_test(config_path = "../configs/Config.toml", modules_dir = "../artifacts")]
+     fn non_empty_string(char_count: marine_test_env::char_count::ModuleInterface) {
+         let actual = char_count.char_count("SuperNode ☮".to_string());
+         assert_eq!(actual.msg, "Message: SuperNode ☮");
+         assert_eq!(actual.reply, "Your message SuperNode ☮ has 11 character(s)".to_string());
+     }
+ 
+     #[marine_test(config_path = "../configs/Config.toml", modules_dir = "../artifacts")]
+     fn empty_string(char_count: marine_test_env::char_count::ModuleInterface) {
+         let actual = char_count.char_count("".to_string());
+         assert_eq!(actual.msg, "Your message was empty");
+         assert_eq!(actual.reply, "Your message has 0 characters"); 
+     }
+ }
 
 ```
 For tests running use the`cargo +nightly test --release` command. 
 
-### Run  [Marine REPL] to locally validate
-
-In your VSCode terminal the `4-char-count-service` directory run:
-
-```text
-mrepl configs/Config.toml
-```
-
-which puts us in the REPL:
-
-```bash
-mrepl configs/Config.toml
-Welcome to the Marine REPL (version 0.9.1)
-Minimal supported versions
-  sdk: 0.6.0
-  interface-types: 0.20.0
-
-app service was created with service id = be5f342c-904b-4182-a09b-47342923419e
-elapsed time 54.381794ms
-
-1> interface
-Loaded modules interface:
-data CharCount:
-  msg: string
-  count: string
-
-char_count:
-  fn char_count(msg: string) -> CharCount
-
-2> call char_count char_count ["At Fluence"]
-result: Object({"count": String("10 chars"), "msg": String("At Fluence")})
- elapsed time: 185.709µs
-
-3> quit
-```
-
-### Exporting WebAssembly Interfaces To Aqua
-
-
-```text
-marine aqua artifacts/char_count.wasm
-```
-
-Which gives us the Aqua-ready interfaces:
-
-```haskell
-module CharCount declares *
-
-data CharCount:
-  msg: string
-  count: string
-
-service CharCount:
-  char_count(msg: string) -> CharCount
-```
-
-### Deploying the Wasm Module To The Network
+### Deployment To Fluence
 
 To get a peer from one of the Fluence testnets use `fldist`. 
 
@@ -155,14 +97,23 @@ service id: 32e7f3e6-9f1e-4140-8281-c58bc4e59440
 service created successfully
 ```
 
-Take note of the service id, `service id: d55b947f-a8ca-45cc-a53b-a243b34294da` will be use in `3-browser-to-serive`
+You can ensure your service has been deployed by viewing the Fluence Developer Hub:
+https://dash.fluence.dev/blueprint/2741065608bdb352bf4b4762bfed3e9f3e15145806da3ec9deeb92e785951b62
 
-## Update 3-browser-to-service
 
-Update 3-browser-to-service to show char count the message. Go to `3-browser-to-service`
+### Update Aqua code
 
-### Update aqua whit the new service
+Aqua is a simplified language for defining peer-to-peer applications with Fluence.
 
+With the character count contract deployed, we move to the front end code. This is located in the quickstart/3-browser-to-service.
+
+Our changes focus on the getting-started.aqua file. We create character_count.aqua.
+
+Firstly we change the service id and peer id to match those returned when we deployed the contract.
+
+Secondly, we refactor all references related to hello world to char count versions.
+
+The most important change is that we will now need to pass through our message (messageToSend) and need to update the interface to support this:
 
 ```
 import "@fluencelabs/aqua-lib/builtin.aqua"
@@ -196,6 +147,11 @@ func countChars(messageToSend: string, targetPeerId: PeerId, targetRelayPeerId: 
     <- comp.reply
 ```
 
+### Compile aqua file
+```
+npm run compile-aqua
+```
+
 ### Run install first
 ```
 npm install
@@ -206,9 +162,10 @@ npm install
 npm run compile-aqua
 ```
 
-### Update App.tsx
+### Update App.tsx for frontend
 
-In order to use the new service and display de char count you should update this file as is done in `3-browser-to-service/src/App.tsx
+The front end code is found in the src/App.tsx file from `3-browser-to-service` . For this simplified application this mostly requires changing hello and hello world variable names to their character count alternatives that we used in the character_count.aqua file.
+
 
 ### Run the application 
 
@@ -220,5 +177,11 @@ npm start
 
 Which will open a new browser tab at `http://localhost:3000` . Following the instructions, we connect to any one of the displayed relay ids, open another browser tab also at  `http://localhost:3000`, select a relay and copy and  paste the client peer id and relay id into corresponding fields in the first tab and press the `Say Hello` button.
 
-You will see the message and char count for this message
+You will see the message and char count for this message when send the message
+
+Send:
+<img width="993" alt="Screen Shot 2021-09-11 at 13 31 33" src="https://user-images.githubusercontent.com/13186215/132939112-c289cb83-8eaf-431c-8842-667f0b13a14c.png">
+
+Receive:
+<img width="1375" alt="Screen Shot 2021-09-11 at 13 31 27" src="https://user-images.githubusercontent.com/13186215/132939124-924e9465-d922-48b6-9a51-c61cfb6ad187.png">
 
