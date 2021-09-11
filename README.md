@@ -147,11 +147,6 @@ func countChars(messageToSend: string, targetPeerId: PeerId, targetRelayPeerId: 
     <- comp.reply
 ```
 
-### Compile aqua file
-```
-npm run compile-aqua
-```
-
 ### Run install first
 ```
 npm install
